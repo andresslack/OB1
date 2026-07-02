@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPTransport } from "@hono/mcp";
@@ -405,7 +405,7 @@ server.registerTool(
         `Date range: ${
           data?.length
             ? new Date(data[data.length - 1].created_at).toLocaleDateString() +
-              " â†’ " +
+              " Ã¢â€ â€™ " +
               new Date(data[0].created_at).toLocaleDateString()
             : "N/A"
         }`,
@@ -440,7 +440,7 @@ server.registerTool(
   {
     title: "Capture Thought",
     description:
-      "Save a new thought to the Open Brain. Generates an embedding and extracts metadata automatically. Use this when the user wants to save something to their brain directly from any AI client â€” notes, insights, decisions, or migrated content from other systems.",
+      "Save a new thought to the Open Brain. Generates an embedding and extracts metadata automatically. Use this when the user wants to save something to their brain directly from any AI client Ã¢â‚¬â€ notes, insights, decisions, or migrated content from other systems.",
     annotations: {
       readOnlyHint: false,
       openWorldHint: false,
@@ -448,7 +448,7 @@ server.registerTool(
       idempotentHint: false,
     },
     inputSchema: {
-      content: z.string().describe("The thought to capture â€” a clear, standalone statement that will make sense when retrieved later by any AI"),
+      content: z.string().describe("The thought to capture Ã¢â‚¬â€ a clear, standalone statement that will make sense when retrieved later by any AI"),
     },
   },
   async ({ content }) => {
@@ -486,7 +486,7 @@ server.registerTool(
       const meta = metadata as Record<string, unknown>;
       let confirmation = `Captured as ${meta.type || "thought"}`;
       if (Array.isArray(meta.topics) && meta.topics.length)
-        confirmation += ` â€” ${(meta.topics as string[]).join(", ")}`;
+        confirmation += ` Ã¢â‚¬â€ ${(meta.topics as string[]).join(", ")}`;
       if (Array.isArray(meta.people) && meta.people.length)
         confirmation += ` | People: ${(meta.people as string[]).join(", ")}`;
       if (Array.isArray(meta.action_items) && meta.action_items.length)
@@ -547,7 +547,7 @@ async function readBodyText(req: Request): Promise<string | null> {
  * Best-effort extraction of the JSON-RPC `id` from a raw request body.
  * Returns null when the body is missing, not JSON, or not a JSON-RPC
  * shape with an id. Per the JSON-RPC 2.0 spec, id may be a string,
- * number, or null â€” we preserve any of those; anything else becomes null.
+ * number, or null Ã¢â‚¬â€ we preserve any of those; anything else becomes null.
  */
 function extractJsonRpcId(bodyText: string | null): string | number | null {
   if (!bodyText) return null;
@@ -560,14 +560,14 @@ function extractJsonRpcId(bodyText: string | null): string | number | null {
       }
     }
   } catch {
-    // fall through â€” malformed body
+    // fall through Ã¢â‚¬â€ malformed body
   }
   return null;
 }
 
 /**
  * Build a JSON-RPC 2.0 error envelope response for auth failures.
- * Returns HTTP 200 â€” the JSON-RPC layer expresses the error so that
+ * Returns HTTP 200 Ã¢â‚¬â€ the JSON-RPC layer expresses the error so that
  * strict MCP clients keep the connection alive instead of treating
  * the failure as a transport-level fault.
  */
@@ -591,7 +591,7 @@ function unauthorizedResponse(id: string | number | null): Response {
 
 const app = new Hono();
 
-// CORS preflight â€” required for browser/Electron-based clients (Claude Desktop, claude.ai)
+// CORS preflight Ã¢â‚¬â€ required for browser/Electron-based clients (Claude Desktop, claude.ai)
 app.options("*", (c) => {
   return c.text("ok", 200, corsHeaders);
 });
