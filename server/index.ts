@@ -596,6 +596,22 @@ app.options("*", (c) => {
   return c.text("ok", 200, corsHeaders);
 });
 
+// GET /mcp — discovery probe for ChatGPT and other clients
+// Returns a quick JSON response instead of opening an SSE stream
+app.get("*", async (c) => {
+  const provided = c.req.header("x-brain-key") || new URL(c.req.url).searchParams.get("key");
+  if (!provided || provided !== MCP_ACCESS_KEY) {
+    return unauthorizedResponse(null);
+  }
+  return c.json({
+    name: "open-brain",
+    version: "1.0.0",
+    description: "OB1 — Open Brain MCP server",
+    transport: "streamable-http",
+    tools: ["search", "fetch", "search_thoughts", "list_thoughts", "thought_stats", "capture_thought"],
+  });
+});
+
 app.all("*", async (c) => {
   // Accept access key via header OR URL query parameter
   const provided = c.req.header("x-brain-key") || new URL(c.req.url).searchParams.get("key");
