@@ -6,5 +6,10 @@
     "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.110.0",
     "hono": "npm:hono@^4.12.27",
     "zod": "npm:zod@^4.4.3"
+  },
+  "deploy": {
+    "org": "andresslack",
+    "app": "ob1",
+    "entrypoint": "server/index.ts"
   }
 }
