@@ -7,6 +7,9 @@
     "hono": "npm:hono@^4.12.27",
     "zod": "npm:zod@^4.4.3"
   },
+  "tasks": {
+    "build": "deno eval \"console.log('build ok')\""
+  },
   "deploy": {
     "org": "andresslack",
     "app": "ob1",
