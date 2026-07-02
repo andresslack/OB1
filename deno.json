@@ -1,4 +1,4 @@
-﻿{
+{
   "imports": {
     "@hono/mcp": "npm:@hono/mcp@^0.3.0",
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
