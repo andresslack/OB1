@@ -1,0 +1,39 @@
+name: Encoding Check
+
+# Guards against CP1252-mojibake reaching the repo — the failure mode where a
+# tool reads UTF-8 as Windows-1252 and writes it back as UTF-8, turning "—"
+# into "â€”" and then into a longer mangle on the next pass. encoding-check:allow
+#
+# Runs on push to main as well as on pull requests: the incident this guard was
+# written for (8 corrupted literals in server/index.ts, live for two months)
+# arrived via direct commits to main, which a PR-only workflow would have
+# missed entirely.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  encoding:
+    name: Mojibake Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Scan for mojibake
+        run: node scripts/check-encoding.mjs
