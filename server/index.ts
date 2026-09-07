@@ -98,6 +98,7 @@ Only extract what's explicitly there.`,
 
 // --- MCP Server Setup ---
 
+function createServer() {
 const server = new McpServer({
   name: "open-brain",
   version: "1.0.0",
@@ -118,7 +119,7 @@ server.registerTool(
       query: z.string().describe("The search query to run against Open Brain thoughts"),
     },
   },
-  async ({ query }) => {
+  async ({ query }: { query: string }) => {
     try {
       const qEmb = await getEmbedding(query);
       const { data, error } = await supabase.rpc("match_thoughts", {
@@ -166,7 +167,7 @@ server.registerTool(
       id: z.string().describe("The Open Brain thought ID returned by the search tool"),
     },
   },
-  async ({ id }) => {
+  async ({ id }: { id: string }) => {
     try {
       const { data, error } = await supabase
         .from("thoughts")
@@ -222,7 +223,7 @@ server.registerTool(
       threshold: z.number().optional().default(0.5),
     },
   },
-  async ({ query, limit, threshold }) => {
+  async ({ query, limit, threshold }: { query: string; limit: number; threshold: number }) => {
     try {
       const qEmb = await getEmbedding(query);
       const { data, error } = await supabase.rpc("match_thoughts", {
@@ -302,7 +303,7 @@ server.registerTool(
       days: z.number().optional().describe("Only thoughts from the last N days"),
     },
   },
-  async ({ limit, type, topic, person, days }) => {
+  async ({ limit, type, topic, person, days }: { limit: number; type?: string; topic?: string; person?: string; days?: number }) => {
     try {
       let q = supabase
         .from("thoughts")
@@ -451,7 +452,7 @@ server.registerTool(
       content: z.string().describe("The thought to capture — a clear, standalone statement that will make sense when retrieved later by any AI"),
     },
   },
-  async ({ content }) => {
+  async ({ content }: { content: string }) => {
     try {
       const [embedding, metadata] = await Promise.all([
         getEmbedding(content),
@@ -503,6 +504,9 @@ server.registerTool(
     }
   }
 );
+
+return server;
+}
 
 // --- Hono App with Auth + CORS ---
 
@@ -589,7 +593,7 @@ function unauthorizedResponse(id: string | number | null): Response {
   });
 }
 
-const app = new Hono();
+export const app = new Hono();
 
 // CORS preflight — required for browser/Electron-based clients (Claude Desktop, claude.ai)
 app.options("*", (c) => {
@@ -642,20 +646,54 @@ app.all("*", async (c) => {
     Object.defineProperty(c.req, "raw", { value: patched, writable: true });
   }
 
+  // A stateless HTTP request owns its server and transport. Reusing one
+  // McpServer across requests makes the SDK reject the next connect().
+  const server = createServer();
   const transport = new StreamableHTTPTransport();
-  await server.connect(transport);
-  return transport.handleRequest(c);
+  const close = () => server.close();
+  try {
+    await server.connect(transport);
+    const response = await transport.handleRequest(c);
+    if (!response?.body) {
+      await close();
+      return response;
+    }
+    // SSE is still being produced when handleRequest returns. Dispose only
+    // after the response ends or the caller cancels, not in an early finally.
+    const reader = response.body.getReader();
+    const body = new ReadableStream({
+      async pull(controller) {
+        try {
+          const { done, value } = await reader.read();
+          if (done) { await close(); controller.close(); }
+          else controller.enqueue(value);
+        } catch (error) {
+          await close().catch(() => {});
+          controller.error(error);
+        }
+      },
+      async cancel(reason) {
+        try { await reader.cancel(reason); }
+        finally { await close(); }
+      },
+    });
+    return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+  } catch (error) {
+    await close().catch(() => {});
+    throw error;
+  }
 });
 
 // Dual-mode: stdio for Claude Desktop local MCP, HTTP for remote/cloud deployment
 const isStdio = !Deno.env.get("PORT") && Deno.stdin.isTerminal() === false && !Deno.env.get("DENO_DEPLOYMENT_ID");
 
-if (isStdio) {
+if (import.meta.main && isStdio) {
   // stdio transport for Claude Desktop
   const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
+  const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-} else {
+} else if (import.meta.main) {
   // HTTP transport for remote deployment
   Deno.serve(app.fetch);
 }
