@@ -591,6 +591,50 @@ function unauthorizedResponse(id: string | number | null): Response {
 
 const app = new Hono();
 
+const REQUEST_LOG_MAX = 500; // ring buffer size, keep small since it's in-memory
+const requestLog: Array<{
+  ts: string;
+  method: string;
+  path: string;
+  ua: string | null;
+  ip: string | null;
+  keySource: "header" | "query" | "none";
+}> = [];
+
+app.use("*", async (c, next) => {
+  const url = new URL(c.req.url);
+  const keySource: "header" | "query" | "none" = c.req.header("x-brain-key")
+    ? "header"
+    : url.searchParams.get("key")
+    ? "query"
+    : "none";
+
+  const entry = {
+    ts: new Date().toISOString(),
+    method: c.req.method,
+    path: url.pathname,
+    ua: c.req.header("user-agent") ?? null,
+    ip: c.req.header("x-forwarded-for") ?? c.req.header("cf-connecting-ip") ?? null,
+    keySource,
+  };
+
+  requestLog.push(entry);
+  if (requestLog.length > REQUEST_LOG_MAX) requestLog.shift();
+
+  console.log(`${entry.ts} ${entry.method} ${entry.path} ua="${entry.ua ?? "-"}" key=${entry.keySource} ip=${entry.ip ?? "-"}`);
+
+  await next();
+});
+
+app.get("/_debug/requests", (c) => {
+  const url = new URL(c.req.url);
+  const authed = c.req.header("x-brain-key") || url.searchParams.get("key");
+  if (!authed || authed !== MCP_ACCESS_KEY) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  return c.json({ count: requestLog.length, entries: requestLog });
+});
+
 // CORS preflight — required for browser/Electron-based clients (Claude Desktop, claude.ai)
 app.options("*", (c) => {
   return c.text("ok", 200, corsHeaders);
