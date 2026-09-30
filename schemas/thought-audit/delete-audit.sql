@@ -1,15 +1,22 @@
 -- ============================================================
--- thought_audit (delete_thought support) — NOT YET RUN
+-- thought_audit (delete support) — Applied to production Supabase. Live table verified to match this definition on 2026-09-30.
 --
 -- Creates thought_audit if missing, append-only, for the server's
--- delete_thought MCP tool. Same table shape as schemas/thought-audit/
+-- delete_thought MCP tool (source = 'mcp') and the REST DELETE
+-- /thought/:id route in open-brain-rest (source = 'rest'). Same table
+-- shape as schemas/thought-audit/
 -- schema.sql, so running either file is safe. Idempotent.
 --
--- The server writes one row per delete BEFORE removing the thought:
+-- Each writer records one row per delete BEFORE removing the thought:
 --   action = 'delete'
 --   diff   = { previous_content, previous_metadata, previous_created_at }
 -- Restore = recapture from diff.previous_content (exact row restore,
 -- including id and embedding, is not supported).
+--
+-- source is intentionally unconstrained (open TEXT, no CHECK), so new
+-- writers can tag themselves without a schema change. For REST rows,
+-- actor_context carries route, user_agent and origin. user_agent and
+-- origin are client-supplied forensic hints, not identity.
 --
 -- No existing thoughts columns are touched. thought_id is deliberately
 -- NOT a foreign key so audit rows survive deletion of their subject.
