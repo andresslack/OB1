@@ -523,7 +523,10 @@ app.put("/thought/:id", async (c) => {
 });
 
 app.delete("/thought/:id", async (c) => {
-  const result = await deleteThoughtWithAudit(supabase, c.req.param("id"));
+  const result = await deleteThoughtWithAudit(supabase, c.req.param("id"), {
+    userAgent: c.req.header("user-agent"),
+    origin: c.req.header("origin"),
+  });
   return c.json(result.body, result.status, corsHeaders);
 });
 

@@ -14,7 +14,11 @@ export type DeleteOutcome =
 // deno-lint-ignore no-explicit-any
 type Db = { from: (table: string) => any };
 
-export async function deleteThoughtWithAudit(db: Db, id: string): Promise<DeleteOutcome> {
+// Caller headers recorded in actor_context. Both are client-supplied and
+// unauthenticated; they are forensic hints, not identity.
+export type Caller = { userAgent?: string | null; origin?: string | null };
+
+export async function deleteThoughtWithAudit(db: Db, id: string, caller: Caller = {}): Promise<DeleteOutcome> {
   if (!UUID_RE.test(id)) return { status: 400, body: { error: "Invalid thought id: must be a UUID" } };
 
   try {
@@ -38,7 +42,12 @@ export async function deleteThoughtWithAudit(db: Db, id: string): Promise<Delete
           previous_metadata: existing.metadata || {},
           previous_created_at: existing.created_at,
         },
-        actor_context: { tool: "rest_delete", route: "DELETE /thought/:id" },
+        actor_context: {
+          tool: "rest_delete",
+          route: "DELETE /thought/:id",
+          user_agent: caller.userAgent ?? null,
+          origin: caller.origin ?? null,
+        },
       })
       .select("id")
       .single();

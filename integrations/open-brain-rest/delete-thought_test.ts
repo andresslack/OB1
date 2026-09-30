@@ -16,12 +16,16 @@ type Opts = { row?: unknown; auditError?: string; deleteRows?: unknown[] };
 function fakeDb(opts: Opts) {
   const calls: string[] = [];
   let auditPayload: Record<string, unknown> | null = null;
+  const eqArgs: unknown[][] = [];
   const db = {
     from(table: string) {
       const ctx: { op: string } = { op: "select" };
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (...a: unknown[]) => {
+          eqArgs.push(a);
+          return chain;
+        },
         maybeSingle: () => {
           calls.push(`${table}.select`);
           return Promise.resolve({ data: "row" in opts ? opts.row : { id: ID, content: "fake content", metadata: { k: 1 }, created_at: "2026-01-01T00:00:00Z" }, error: null });
@@ -40,7 +44,8 @@ function fakeDb(opts: Opts) {
         delete: () => {
           ctx.op = "delete";
           return {
-            eq: () => ({
+            eq: (...a: unknown[]) => ({
+              _: eqArgs.push(a),
               select: () => {
                 calls.push(`${table}.delete`);
                 return Promise.resolve({ data: opts.deleteRows ?? [{ id: ID }], error: null });
@@ -52,7 +57,7 @@ function fakeDb(opts: Opts) {
       return chain;
     },
   };
-  return { db, calls, audit: () => auditPayload };
+  return { db, calls, eqArgs, audit: () => auditPayload };
 }
 
 Deno.test("invalid UUID gives 400 and touches nothing", async () => {
@@ -90,8 +95,24 @@ Deno.test("success writes audit row before delete and returns audit_id", async (
     action: "delete",
     source: "rest",
     diff: { previous_content: "fake content", previous_metadata: { k: 1 }, previous_created_at: "2026-01-01T00:00:00Z" },
-    actor_context: { tool: "rest_delete", route: "DELETE /thought/:id" },
+    actor_context: { tool: "rest_delete", route: "DELETE /thought/:id", user_agent: null, origin: null },
   }, "audit payload");
+});
+
+Deno.test("audit actor_context records caller User-Agent and Origin", async () => {
+  const f = fakeDb({});
+  await deleteThoughtWithAudit(f.db, ID, { userAgent: "test-agent/1.0", origin: "https://dash.example.test" });
+  assertEq(
+    (f.audit() as { actor_context: unknown }).actor_context,
+    { tool: "rest_delete", route: "DELETE /thought/:id", user_agent: "test-agent/1.0", origin: "https://dash.example.test" },
+    "actor_context",
+  );
+});
+
+Deno.test("lookup and delete target the requested id", async () => {
+  const f = fakeDb({});
+  await deleteThoughtWithAudit(f.db, ID);
+  assertEq(f.eqArgs, [["id", ID], ["id", ID]], "eq filters");
 });
 
 Deno.test("delete that removes no row after audit gives 500", async () => {
