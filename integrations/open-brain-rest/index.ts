@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { Hono } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { deleteThoughtWithAudit } from "./delete-thought.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -522,10 +523,8 @@ app.put("/thought/:id", async (c) => {
 });
 
 app.delete("/thought/:id", async (c) => {
-  const id = c.req.param("id");
-  const { error } = await supabase.from("thoughts").delete().eq("id", id);
-  if (error) return c.json({ error: error.message }, 500, corsHeaders);
-  return c.json({ id, action: "deleted", message: "Thought deleted" }, 200, corsHeaders);
+  const result = await deleteThoughtWithAudit(supabase, c.req.param("id"));
+  return c.json(result.body, result.status, corsHeaders);
 });
 
 app.post("/capture", async (c) => {

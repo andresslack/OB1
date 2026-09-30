@@ -39,7 +39,7 @@ The function expects `thoughts.id` to be a UUID. The dashboard now treats though
 | `/health` | GET | Auth/API health check |
 | `/stats` | GET | Aggregate count, type, and topic stats |
 | `/thoughts` | GET | Paginated thought browse with filters |
-| `/thought/:id` | GET/PUT/DELETE | Detail, edit, delete |
+| `/thought/:id` | GET/PUT/DELETE | Detail, edit, delete. DELETE requires a UUID, writes a `thought_audit` row (source `rest`) before deleting, and returns 404 if the thought does not exist (requires the `schemas/thought-audit` table) |
 | `/capture` | POST | Save one thought |
 | `/search` | POST | Semantic or text search |
 | `/duplicates` | GET | Near-duplicate scan |
