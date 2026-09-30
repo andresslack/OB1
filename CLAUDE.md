@@ -67,6 +67,7 @@ DESCRIBE THE EXACT WORK.
 
 ## Guard Rails
 
+- **`delete_thought` requires per-call user approval.** Show the user the exact record and get explicit confirmation before every call; never delete in bulk, on inference, or from unreviewed search results. The tool writes a `thought_audit` row first and fails closed.
 - **Never modify the core `thoughts` table structure.** Adding columns is fine; altering or dropping existing ones is not.
 - **No credentials, API keys, or secrets in any file.** Use environment variables.
 - **No binary blobs** over 1MB. No `.exe`, `.dmg`, `.zip`, `.tar.gz`.

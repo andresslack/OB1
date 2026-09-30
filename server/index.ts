@@ -504,6 +504,115 @@ server.registerTool(
   }
 );
 
+// Tool 5: Delete Thought (audit-preserving hard delete, fail closed)
+// Policy: requires per-call user approval. See CLAUDE.md.
+server.registerTool(
+  "delete_thought",
+  {
+    title: "Delete Thought",
+    description:
+      "Permanently delete ONE thought by UUID. The row is hard-deleted after its content and metadata are written to the thought_audit table; if the audit write fails, nothing is deleted. Before calling: show the user the exact record (id and content, e.g. via fetch) and get their explicit confirmation to delete that specific record. Never call this on inference, in bulk, or from a search result the user has not reviewed.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: false,
+    },
+    inputSchema: {
+      id: z.string().uuid().describe("UUID of the single thought to delete"),
+    },
+  },
+  async ({ id }: { id: string }) => {
+    try {
+      const { data: existing, error: fetchError } = await supabase
+        .from("thoughts")
+        .select("id, content, metadata, created_at")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (fetchError) {
+        return {
+          content: [{ type: "text" as const, text: `delete_thought error: ${fetchError.message}` }],
+          isError: true,
+        };
+      }
+      if (!existing) {
+        return {
+          content: [{ type: "text" as const, text: `Thought not found: ${id}` }],
+          isError: true,
+        };
+      }
+
+      const prior = existing as Pick<ThoughtRecord, "id" | "content" | "metadata" | "created_at">;
+      const priorMetadata = prior.metadata || {};
+
+      // Audit first. If this insert fails, the thought is NOT deleted.
+      const { data: audit, error: auditError } = await supabase
+        .from("thought_audit")
+        .insert({
+          thought_id: prior.id,
+          action: "delete",
+          source: "mcp",
+          diff: {
+            previous_content: prior.content,
+            previous_metadata: priorMetadata,
+            previous_created_at: prior.created_at,
+          },
+          actor_context: { tool: "delete_thought" },
+        })
+        .select("id")
+        .single();
+
+      if (auditError || !audit) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `delete_thought aborted, audit write failed, nothing deleted: ${auditError?.message ?? "no audit row returned"}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const { data: deleted, error: deleteError } = await supabase
+        .from("thoughts")
+        .delete()
+        .eq("id", prior.id)
+        .select("id");
+
+      if (deleteError || !deleted || deleted.length !== 1) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `delete_thought failed after audit row ${audit.id} was written: ${deleteError?.message ?? `expected 1 deleted row, got ${deleted?.length ?? 0}`}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              deleted_id: prior.id,
+              content_preview: prior.content.slice(0, 100),
+              audit_id: audit.id,
+            }),
+          },
+        ],
+      };
+    } catch (err: unknown) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
 // --- Hono App with Auth + CORS ---
 
 const corsHeaders = {
@@ -652,7 +761,7 @@ app.get("*", async (c) => {
     version: "1.0.0",
     description: "OB1 — Open Brain MCP server",
     transport: "streamable-http",
-    tools: ["search", "fetch", "search_thoughts", "list_thoughts", "thought_stats", "capture_thought"],
+    tools: ["search", "fetch", "search_thoughts", "list_thoughts", "thought_stats", "capture_thought", "delete_thought"],
   });
 });
 
