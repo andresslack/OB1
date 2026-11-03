@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "start": "deno run --allow-env --allow-net index.ts"
+  },
+  "nodeModulesDir": "auto",
+  "deploy": {
+    "org": "andresslack",
+    "app": "ob1-actions"
+  }
+}
+
+
+
