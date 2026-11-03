@@ -19,16 +19,16 @@ test('unauthorized and invalid requests never reach OB1', async () => {
   assert.equal((await handler(req('capture_thought', { content: 'x'.repeat(91000) }))).status, 413);
   assert.equal(calls, 0);
 });
-test('all six operations dispatch correct names, arguments and defaults', async () => {
+test('all seven operations dispatch correct names, arguments and defaults', async () => {
   const seen = [];
   const handler = createHandler(config, async (_, name, args) => {
     seen.push([name, args]);
-    return content(name === 'search' ? '{"results":[]}' : name === 'fetch' ? '{"id":"one","title":"One","text":"Body"}' : 'ok');
+    return content(name === 'search' ? '{"results":[]}' : name === 'fetch' ? '{"id":"one","title":"One","text":"Body"}' : name === 'delete_thought' ? '{"deleted_id":"11111111-1111-4111-8111-111111111111","audit_id":"22222222-2222-4222-8222-222222222222"}' : 'ok');
   });
-  for (const [name, args] of [['search', { query: 'hi' }], ['fetch', { id: 'one' }], ['search_thoughts', { query: 'hi' }], ['list_thoughts', { topic: 'work' }], ['thought_stats', {}], ['capture_thought', { content: 'note' }]]) assert.equal((await handler(req(name, args))).status, 200);
+  for (const [name, args] of [['search', { query: 'hi' }], ['fetch', { id: 'one' }], ['search_thoughts', { query: 'hi' }], ['list_thoughts', { topic: 'work' }], ['thought_stats', {}], ['capture_thought', { content: 'note' }], ['delete_thought', { id: '11111111-1111-4111-8111-111111111111' }]]) assert.equal((await handler(req(name, args))).status, 200);
   assert.deepEqual(seen[2], ['search_thoughts', { query: 'hi', limit: 10, threshold: 0.5 }]);
   assert.deepEqual(seen[3], ['list_thoughts', { limit: 10, topic: 'work' }]);
-  assert.equal(seen.length, 6);
+  assert.equal(seen.length, 7);
 });
 test('citations omitted unless verified base configured; text remains available', async () => {
   const invoke = async () => content(JSON.stringify({ id: 'a/b', title: 'Title', text: 'Full text', url: 'https://openbrain.local/thoughts/a' }));
@@ -60,10 +60,10 @@ test('oversized and malformed upstream results fail cleanly', async () => {
   assert.equal((await createHandler(config, async () => content('x'.repeat(90001)))(req('thought_stats'))).status, 502);
   assert.equal((await createHandler(config, async () => content('{}'))(req('search', { query: 'hi' }))).status, 502);
 });
-test('schema has six explicit operations and only capture requires confirmation', () => {
+test('schema has seven explicit operations and both writes require confirmation', () => {
   const schema = openapi(config.publicUrl);
-  assert.equal(Object.keys(schema.paths).length, 6);
-  for (const [path, item] of Object.entries(schema.paths)) assert.equal(item.post['x-openai-isConsequential'], path.endsWith('capture_thought'));
+  assert.equal(Object.keys(schema.paths).length, 7);
+  for (const [path, item] of Object.entries(schema.paths)) assert.equal(item.post['x-openai-isConsequential'], path.endsWith('capture_thought') || path.endsWith('delete_thought'));
   assert.equal(schema.components.securitySchemes.actionKey.scheme, 'bearer');
 });
 test('reproduces the inspected OB1 shared-server transport lifecycle error', async () => {

@@ -78,6 +78,12 @@ function normalize(name, result, citationBase) {
   if (result?.isError) throw new AdapterError(502, 'OB1 could not complete this operation.');
   if (!Array.isArray(result?.content) || result.content.some(c => c.type !== 'text' || typeof c.text !== 'string')) throw new AdapterError(502, 'Unexpected OB1 response.');
   const text = result.content.map(c => c.text).join('\n');
+  if (name === 'delete_thought') {
+    let deleted;
+    try { deleted = JSON.parse(text); } catch { throw new AdapterError(502, 'Invalid OB1 delete result.'); }
+    if (!deleted || typeof deleted.deleted_id !== 'string' || typeof deleted.audit_id !== 'string') throw new AdapterError(502, 'Invalid OB1 delete result.');
+    return { id: deleted.deleted_id, audit_id: deleted.audit_id };
+  }
   if (name !== 'search' && name !== 'fetch') return { text };
   let data;
   try { data = JSON.parse(text); } catch { throw new AdapterError(502, 'Invalid structured OB1 result.'); }

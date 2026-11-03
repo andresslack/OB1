@@ -10,6 +10,7 @@ export const operations = {
   list_thoughts: { description: 'List recent OB1 thoughts with optional filters.', input: z.strictObject({ limit, type: filter, topic: filter, person: filter, days: z.number().int().min(1).max(36500).optional() }) },
   thought_stats: { description: 'Get OB1 thought counts, topics, types, and people.', input: z.strictObject({}) },
   capture_thought: { description: 'Save a thought in OB1. Do not automatically retry after an error or timeout; the write may have succeeded.', input: z.strictObject({ content: z.string().trim().min(1).max(20000) }), write: true },
+  delete_thought: { description: 'Permanently delete one reviewed OB1 thought by UUID. The core writes an audit record first and aborts if that audit write fails. The caller must obtain explicit confirmation for the exact thought immediately before deletion. Never retry after an error or uncertain result.', input: z.strictObject({ id: z.string().uuid() }), write: true, destructive: true },
 };
 
 const citation = { type: 'string', format: 'uri' };
@@ -26,6 +27,7 @@ export function openapi(publicUrl) {
       delete schema.$schema;
       const output = name === 'search' ? { type: 'object', properties: { results: { type: 'array', items: result } }, required: ['results'] }
         : name === 'fetch' ? { type: 'object', properties: { ...result.properties, text: { type: 'string' }, metadata: { type: 'object', additionalProperties: true } }, required: ['id', 'title', 'text'] }
+        : name === 'delete_thought' ? { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, audit_id: { type: 'string', format: 'uuid' } }, required: ['id', 'audit_id'] }
         : { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] };
       return [`/actions/${name}`, { post: {
         operationId: name, description: op.description, 'x-openai-isConsequential': !!op.write,
