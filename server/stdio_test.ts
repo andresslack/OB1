@@ -3,9 +3,12 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 Deno.test('actual stdio child initializes, discovers, calls and stays connected', async () => {
   let databaseReads = 0;
+  const contentFilters: (string | null)[] = [];
   const database = Deno.serve({ hostname: '127.0.0.1', port: 0, onListen() {} }, request => {
-    if (new URL(request.url).pathname !== '/rest/v1/thoughts') return new Response('unexpected path', { status: 404 });
+    const url = new URL(request.url);
+    if (url.pathname !== '/rest/v1/thoughts') return new Response('unexpected path', { status: 404 });
     databaseReads++;
+    contentFilters.push(url.searchParams.get('content'));
     return Response.json([]);
   });
   const transport = new StdioClientTransport({
@@ -31,7 +34,11 @@ Deno.test('actual stdio child initializes, discovers, calls and stays connected'
       if (result.isError || JSON.stringify(result.content) !== JSON.stringify([{ type: 'text', text: 'No thoughts found.' }])) throw new Error('Stdio tool call failed');
       await client.ping();
     }
-    if (databaseReads !== 3) throw new Error('Expected three real tool dispatches to the local fake database');
+    const filtered = await client.callTool({ name: 'list_thoughts', arguments: { contains: 'SAM-ASSESSMENT-MARKER_x%', limit: 100 } });
+    if (filtered.isError) throw new Error('Stdio contains call failed');
+    if (databaseReads !== 4) throw new Error('Expected four real tool dispatches to the local fake database');
+    if (JSON.stringify(contentFilters) !== JSON.stringify([null, null, null, 'ilike.%SAM-ASSESSMENT-MARKER\\_x\\%%']))
+      throw new Error(`Stdio contains filter wrong: ${JSON.stringify(contentFilters)}`);
     if ((await client.listTools()).tools.length !== 7) throw new Error('Stdio connection did not survive tool calls');
   } finally {
     await client.close();

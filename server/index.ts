@@ -39,6 +39,14 @@ function thoughtTitle(content: string, createdAt?: string): string {
   return firstLine ? `${datePrefix} - ${firstLine}` : `${datePrefix} thought`;
 }
 
+/**
+ * Escape LIKE/ILIKE metacharacters so user text matches literally.
+ * Backslash is PostgreSQL's default LIKE escape character, so it is escaped first.
+ */
+export function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 function thoughtUrl(id: string): string {
   return `${CITATION_BASE_URL.replace(/\/$/, "")}/${id}`;
 }
@@ -301,9 +309,12 @@ server.registerTool(
       topic: z.string().optional().describe("Filter by topic tag"),
       person: z.string().optional().describe("Filter by person mentioned"),
       days: z.number().optional().describe("Only thoughts from the last N days"),
+      contains: z.string().optional().describe(
+        "Case-insensitive substring match on the thought content (literal text, e.g. a record prefix like SAM-ASSESSMENT-MARKER: or a tag like [sam-search]). Combines with the other filters; results stay newest first. Set limit up to 100 or more to list every match deterministically.",
+      ),
     },
   },
-  async ({ limit, type, topic, person, days }: { limit: number; type?: string; topic?: string; person?: string; days?: number }) => {
+  async ({ limit, type, topic, person, days, contains }: { limit: number; type?: string; topic?: string; person?: string; days?: number; contains?: string }) => {
     try {
       let q = supabase
         .from("thoughts")
@@ -319,6 +330,7 @@ server.registerTool(
         since.setDate(since.getDate() - days);
         q = q.gte("created_at", since.toISOString());
       }
+      if (contains) q = q.ilike("content", `%${escapeLikePattern(contains)}%`);
 
       const { data, error } = await q;
 
